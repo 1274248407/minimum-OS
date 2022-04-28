@@ -1,0 +1,1 @@
+floppya:1_44="D:\proramming\mustly_book\Linux\Operating_system\Design and implementation of a 64 bit operating system\test\boot.img", status=inserted
