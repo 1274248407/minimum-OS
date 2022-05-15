@@ -44,7 +44,7 @@ else
 fi
 
 echo -e "${RED_COLOR}=== gen boot.bin ===${RESET}"
-nasm boot.asm -o boot.bin
+nasm Answer.asm -o boot.bin
 echo -e "${RED_COLOR}=== write boot.bin  to boot.img ===${RESET}"
 dd if=boot.bin of=boot.img bs=512 count=1 conv=notrunc
 echo -e "${RED_COLOR}=== running..PS:emulator will stop at beinging,press 'c' to running ===${RESET}"

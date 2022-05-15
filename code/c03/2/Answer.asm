@@ -92,27 +92,33 @@ Label_Start:
 
 ;=======	search loader.bin
 	mov	word	[SectorNo],	SectorNumOfRootDirStart
-
+;SectorNo dw 0 ; SectorNumOfRootDirStart = 0x13
+;sectorNo = 0x13
 Lable_Search_In_Root_Dir_Begin:
-
+	;RootDirSizeForLoop dw RootDirSectors = 0xe
 	cmp	word	[RootDirSizeForLoop],	0
-	jz	Label_No_LoaderBin
-	dec	word	[RootDirSizeForLoop]	
+	jz	Label_No_LoaderBin; RootDirSizeForLoop != 0
+	dec	word	[RootDirSizeForLoop]
+	; RootDirSectors - 1 = 0xd
 	mov	ax,	00h
 	mov	es,	ax
 	mov	bx,	8000h
-	mov	ax,	[SectorNo]
-	mov	cl,	1
+	mov	ax,	[SectorNo];0x13
+	mov	cl,	1;
+;input argument ax = 0x13, cl = 1, es:bx = 0:8000h
 	call	Func_ReadOneSector
-	mov	si,	LoaderFileName
+	;read disk sectors into memory (es:bx == 0:8000h) 
+	mov	si,	LoaderFileName;"LOADER BIN", 0
 	mov	di,	8000h
-	cld
+	cld; lower memory address to high memory address
 	mov	dx,	10h
+	;BPB_BytesPerSec / 32 = 512 / 32 = 16 = 0x10
 	
 Label_Search_For_LoaderBin:
 
 	cmp	dx,	0
-	jz	Label_Goto_Next_Sector_In_Root_Dir
+	jz	Label_Goto_Next_Sector_In_Root_Dir 
+	;dx != 0
 	dec	dx
 	mov	cx,	11
 
@@ -122,7 +128,7 @@ Label_Cmp_FileName:
 	jz	Label_FileName_Found
 	dec	cx
 	lodsb	
-	cmp	al,	byte	[es:di]
+	cmp	al,	byte	[es:di];0:8000h
 	jz	Label_Go_On
 	jmp	Label_Different
 
@@ -141,14 +147,15 @@ Label_Different:
 Label_Goto_Next_Sector_In_Root_Dir:
 	
 	add	word	[SectorNo],	1
+	;[SectorNo] = SectorNumOfRootDirStart
 	jmp	Lable_Search_In_Root_Dir_Begin
 	
 ;=======	display on screen : ERROR:No LOADER Found
 
 Label_No_LoaderBin:
 
-	mov	ax,	1301h
-	mov	bx,	008ch
+	mov	ax,	1301h;function
+	mov	bx,	008ch;color attribute
 	mov	dx,	0100h
 	mov	cx,	21
 	push	ax
@@ -203,28 +210,33 @@ Label_File_Loaded:
 	jmp	$
 
 ;=======	read one sector from floppy
-
+;ax = LBA(logical Block Address) number of sector
+;cl = sector amount of read
+;es:bx = start address of purpose buffer
 Func_ReadOneSector:
 	
 	push	bp
 	mov	bp,	sp
 	sub	esp,	2
 	mov	byte	[bp - 2],	cl
-	
+	;store bp and cl
 	push	bx
-	mov	bl,	[BPB_SecPerTrk]
-	div	bl
-	inc	ah
+	mov	bl,	[BPB_SecPerTrk];bl = 18 intermedia
+	div	bl;LBA number of sector / sector per trank
+	inc	ah;reminder + 1. consult = ah
+
 	mov	cl,	ah
-	mov	dh,	al
-	shr	al,	1
-	mov	ch,	al
-	and	dh,	1
+	mov	dh,	al;dh
+	shr	al,	1;signed number
+	mov	ch,	al;ch = al >> 1
+	and	dh,	1;dh = 1
+
 	pop	bx
-	mov	dl,	[BS_DrvNum]
+	mov	dl,	[BS_DrvNum];
+
 Label_Go_On_Reading:
-	mov	ah,	2
-	mov	al,	byte	[bp - 2]
+	mov	ah,	2;functional number
+	mov	al,	byte	[bp - 2];al = cl 'sector amount of read'
 	int	13h
 	jc	Label_Go_On_Reading
 	add	esp,	2
@@ -232,12 +244,13 @@ Label_Go_On_Reading:
 	ret
 
 ;=======	get FAT Entry
-
+;;input argument ah = FAT table number
 Func_GetFATEntry:
 
 	push	es
 	push	bx
 	push	ax
+	
 	mov	ax,	00
 	mov	es,	ax
 	pop	ax
@@ -246,18 +259,19 @@ Func_GetFATEntry:
 	mul	bx
 	mov	bx,	2
 	div	bx
-	cmp	dx,	0
+;ah * 3 / 2 + ah * 1.5b; 1.5b = 00 0000
+	cmp	dx,	0;reminder
 	jz	Label_Even
 	mov	byte	[Odd],	1
-
+	;odd number = 1; even number = 2
 Label_Even:
 
-	xor	dx,	dx
-	mov	bx,	[BPB_BytesPerSec]
-	div	bx
-	push	dx
+	xor	dx,	dx;dx = 0
+	mov	bx,	[BPB_BytesPerSec];512
+	div	bx; / 512
+	push	dx;reminder
 	mov	bx,	8000h
-	add	ax,	SectorNumOfFAT1Start
+	add	ax,	SectorNumOfFAT1Start; + 1
 	mov	cl,	2
 	call	Func_ReadOneSector
 	

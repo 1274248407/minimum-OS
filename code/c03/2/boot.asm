@@ -8,7 +8,8 @@ Offset_Of_Loader equ 0x0
 ;0x1000 << 4 + 0x0 = 0x10000
 RootDirSectors equ 0xe
 SectorNumOfRootDirStart equ 0x13
-SectorNumOfRootDirStart equ 0x11
+SectorNumOfFAT1Start equ 0x1
+SectorBalance equ 0x11
 ;bootloader sector archive 
     jmp short Label_Start
     nop
@@ -70,6 +71,37 @@ Label_Start:
     int 13h
 
     jmp $
+
+;==============function read one sector from floppy
+Functiion_Read_One_Sector:
+    push bp
+    mov bp, sp
+    sub esp, 2
+    mov byte [bp - 2], cl
+
+    push bx
+    mov bl, [BPB_SecPerTrk]
+    div bl
+    inc ah
+
+    mov cl, ah
+    mov dh, al
+    shr al, 1
+    mov ch ,al
+    mov dh, 1
+    mov dl, [BS_DrvNum]
+
+    pop bx
+
+Label_Go_On_Reading:
+    mov ah, 2
+    mov byte al, [bp - 2]
+    int 13h
+    jc Label_Go_On_Reading
+
+    add esp, 2
+    pop bp
+    ret
 
 Start_Boot_Message: db "Hello, world!"
 ;========= fill zero until whole sector
