@@ -19,8 +19,7 @@ BaseOfStack	equ	0x7c00
 
 BaseOfLoader	equ	0x1000
 OffsetOfLoader	equ	0x00
-;RootDirSectors = (BPB_RootEntCnt * 32 + BPB_BytesPerSec - 1) / 
-;BPB_BytesPerSec = (224 * 32 +  
+
 RootDirSectors	equ	14
 SectorNumOfRootDirStart	equ	19
 SectorNumOfFAT1Start	equ	1
@@ -92,44 +91,37 @@ Label_Start:
 
 ;=======	search loader.bin
 	mov	word	[SectorNo],	SectorNumOfRootDirStart
-;SectorNo dw 0 ; SectorNumOfRootDirStart = 0x13
-;sectorNo = 0x13
+
 Lable_Search_In_Root_Dir_Begin:
-	;RootDirSizeForLoop dw RootDirSectors = 0xe
-	cmp	word	[RootDirSizeForLoop],	0; ZF == 1
-	jz	Label_No_LoaderBin; RootDirSizeForLoop != 0
-	dec	word	[RootDirSizeForLoop]
-	; RootDirSectors - 1 = 0xd
+
+	cmp	word	[RootDirSizeForLoop],	0
+	jz	Label_No_LoaderBin
+	dec	word	[RootDirSizeForLoop]	
 	mov	ax,	00h
 	mov	es,	ax
 	mov	bx,	8000h
-	mov	ax,	[SectorNo];0x13
-	mov	cl,	1;amount of read
-;input argument ax = 0x13, cl = 1, es:bx = 0:8000h
+	mov	ax,	[SectorNo]
+	mov	cl,	1
 	call	Func_ReadOneSector
-	;read disk sectors into memory (es:bx == 0:8000h) 
-	mov	si,	LoaderFileName;"LOADER BIN", 0
+	mov	si,	LoaderFileName
 	mov	di,	8000h
-	cld; lower memory address to high memory address
+	cld
 	mov	dx,	10h
-	;BPB_BytesPerSec / 32(bytes per sector) = 512 / 32 = 16 = 0x10
-	;bytes all of sectors / bytes per sector = sector amount
-	;0x10 = directory amount
+	
 Label_Search_For_LoaderBin:
 
-	cmp	dx,	0;ZF == 1
-	jz	Label_Goto_Next_Sector_In_Root_Dir 
-	;dx != 0
+	cmp	dx,	0
+	jz	Label_Goto_Next_Sector_In_Root_Dir
 	dec	dx
-	mov	cx,	11;contain the lastest '0'
+	mov	cx,	11
 
 Label_Cmp_FileName:
 
 	cmp	cx,	0
 	jz	Label_FileName_Found
 	dec	cx
-	lodsb; Used to store the string byte into AL
-	cmp	al,	byte	[es:di];0:8000h
+	lodsb	
+	cmp	al,	byte	[es:di]
 	jz	Label_Go_On
 	jmp	Label_Different
 
@@ -140,23 +132,22 @@ Label_Go_On:
 
 Label_Different:
 
-	and	di,	0ffe0h;1111 1111 1110 0000
-	add	di,	20h;dec == 32 == bytes per sector
+	and	di,	0ffe0h
+	add	di,	20h
 	mov	si,	LoaderFileName
 	jmp	Label_Search_For_LoaderBin
 
 Label_Goto_Next_Sector_In_Root_Dir:
 	
 	add	word	[SectorNo],	1
-	;[SectorNo] = SectorNumOfRootDirStart
 	jmp	Lable_Search_In_Root_Dir_Begin
 	
 ;=======	display on screen : ERROR:No LOADER Found
 
 Label_No_LoaderBin:
 
-	mov	ax,	1301h; function
-	mov	bx,	008ch;color attribute
+	mov	ax,	1301h
+	mov	bx,	008ch
 	mov	dx,	0100h
 	mov	cx,	21
 	push	ax
@@ -171,25 +162,18 @@ Label_No_LoaderBin:
 
 Label_FileName_Found:
 
-	mov	ax,	RootDirSectors;0xe
-	and	di,	0ffe0h;1111 1111 1110 0000
-;"and 0ffre0h" for the 01ah + 8000h(0001 1010) last 5 digit  
-	add	di,	01ah;DIR_FstClus; 8000h + 01ah = 801ah = 1000 0000 0001 1010
-;1. Obtain the DIR_FstClus from 01ah(offset address)
-	mov	cx,	word [es:di];0:801ah; CX = base address of 'loader.bin'
-; Obtain number of first cluster ; use 'word' is that DIR_FstClus length = 2 
-; bytes
-	push cx
+	mov	ax,	RootDirSectors
+	and	di,	0ffe0h
+	add	di,	01ah
+	mov	cx,	word	[es:di]
+	push	cx
 	add	cx,	ax
-	add	cx,	SectorBalance;17
-	mov	ax,	BaseOfLoader;1000h
+	add	cx,	SectorBalance
+	mov	ax,	BaseOfLoader
 	mov	es,	ax
-	mov	bx,	OffsetOfLoader;0
-;1. Configure ES:BX of the start address with "loader.bin"
-;ES:BX = 1000:0h
+	mov	bx,	OffsetOfLoader
 	mov	ax,	cx
-;1. calculate the sector number = 
-;RootDirSectors(0xe) + 8000~8200h + 01ah + SectorBalance(0x11)
+
 Label_Go_On_Loading_File:
 	push	ax
 	push	bx
@@ -197,61 +181,48 @@ Label_Go_On_Loading_File:
 	mov	al,	'.'
 	mov	bl,	0fh
 	int	10h
-;2. Printing '.'
 	pop	bx
 	pop	ax
 
-	mov	cl,	1;sector amount of read
+	mov	cl,	1
 	call	Func_ReadOneSector
-;input argument:
-; AX = LBA(logical Block Address) number of sector = 
-; RootDirSectors(0xe) + 8000~8200h + 01ah + SectorBalance(0x11)
-; CL = sector amount of read = 1
-; ES:BX = start address of purpose buffer; 1000:0
-	pop	ax; ax = mov cx, word [es:bx] 
+	pop	ax
 	call	Func_GetFATEntry
-; input arguments: ax = FAT table number 
-	cmp	ax,	0fffh;1111 1111 1111; FAT table of one 
-	jz	Label_File_Loaded; load completed
+	cmp	ax,	0fffh
+	jz	Label_File_Loaded
 	push	ax
-	mov	dx,	RootDirSectors;0xe
-	add	ax,	dx;
-	add	ax,	SectorBalance;0x11
-	add	bx,	[BPB_BytesPerSec] ;512
-	jmp	Label_Go_On_Loading_File;
-; 3. 
+	mov	dx,	RootDirSectors
+	add	ax,	dx
+	add	ax,	SectorBalance
+	add	bx,	[BPB_BytesPerSec]
+	jmp	Label_Go_On_Loading_File
+
 Label_File_Loaded:
 	
-	jmp	$
-;infinity loop
+	jmp	BaseOfLoader:OffsetOfLoader
+
 ;=======	read one sector from floppy
-;ax = LBA(logical Block Address) number of sector
-;cl = sector amount of read
-;es:bx = start address of purpose buffer
+
 Func_ReadOneSector:
 	
 	push	bp
 	mov	bp,	sp
 	sub	esp,	2
 	mov	byte	[bp - 2],	cl
-	;store bp and cl
 	push	bx
-	mov	bl,	[BPB_SecPerTrk];bl = 18 intermedia
-	div	bl;LBA number of sector / sector per trank
-	inc	ah;reminder + 1. consult = ah
-
+	mov	bl,	[BPB_SecPerTrk]
+	div	bl
+	inc	ah
 	mov	cl,	ah
-	mov	dh,	al;dh
-	shr	al,	1;signed number
-	mov	ch,	al;ch = al >> 1
-	and	dh,	1;dh = 1
-
+	mov	dh,	al
+	shr	al,	1
+	mov	ch,	al
+	and	dh,	1
 	pop	bx
-	mov	dl,	[BS_DrvNum];
-
+	mov	dl,	[BS_DrvNum]
 Label_Go_On_Reading:
-	mov	ah,	2;functional number
-	mov	al,	byte	[bp - 2];al = cl 'sector amount of read'
+	mov	ah,	2
+	mov	al,	byte	[bp - 2]
 	int	13h
 	jc	Label_Go_On_Reading
 	add	esp,	2
@@ -259,51 +230,44 @@ Label_Go_On_Reading:
 	ret
 
 ;=======	get FAT Entry
-;;input argument ah = FAT table number
+
 Func_GetFATEntry:
 
 	push	es
 	push	bx
-
 	push	ax
 	mov	ax,	00
 	mov	es,	ax
 	pop	ax
-
 	mov	byte	[Odd],	0
 	mov	bx,	3
 	mul	bx
 	mov	bx,	2
 	div	bx
-;ah * 3 / 2 = ah * 1.5byte; 1.5byte = 00 0000
-	cmp	dx,	0;reminder
-	jz	Label_Even;even = 0; odd = 1 
+	cmp	dx,	0
+	jz	Label_Even
 	mov	byte	[Odd],	1
-	;odd number = 1; even number = 2
+
 Label_Even:
 
-	xor	dx,	dx;dx = 0
-	mov	bx,	[BPB_BytesPerSec];512
-	div	bx; / 512
+	xor	dx,	dx
+	mov	bx,	[BPB_BytesPerSec]
+	div	bx
 	push	dx
-	;reminder = offset of FAT table in sector 
 	mov	bx,	8000h
-	add	ax,	SectorNumOfFAT1Start; + 1; 
-	;ax = offset of setcor number
+	add	ax,	SectorNumOfFAT1Start
 	mov	cl,	2
-	;read two data of sector as consecutive 
 	call	Func_ReadOneSector
-	;ax, cl, es:bx
+	
 	pop	dx
 	add	bx,	dx
-	;8000h + offset of FAT table in sector
 	mov	ax,	[es:bx]
 	cmp	byte	[Odd],	1
-	jnz	Label_Even_2;== even number
-	shr	ax,	4;only odd number
+	jnz	Label_Even_2
+	shr	ax,	4
 
 Label_Even_2:
-	and	ax,	0fffh;1111 1111 1111
+	and	ax,	0fffh
 	pop	bx
 	pop	es
 	ret
@@ -318,7 +282,7 @@ Odd			db	0
 
 StartBootMessage:	db	"Start Boot"
 NoLoaderMessage:	db	"ERROR:No LOADER Found"
-LoaderFileName:		db	"LOADER  BIN",0
+LoaderFileName:		db	"LOADER BIN",0
 
 ;=======	fill zero until whole sector
 
